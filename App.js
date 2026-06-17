@@ -19,7 +19,7 @@ function getCorsFreeUrl(url) {
 dayjs.extend(utc);
 const now = new Date();
 const fortnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 14);
-const endDefault = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+const endDefault = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 2);
 const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate(),0);
 
 
@@ -54,8 +54,8 @@ class App extends Component {
 
         this.addCelestrakSets();
         this.setState({
-            attacker_station: this.engine.addObserver(30, -90, 0.370, 'attack'),
-            defender_station: this.engine.addObserver(28.5427, -80.6490, 0.370, 'ground'),
+            attacker_station: this.engine.addObserver(39.9042, 116.4074, 0.370, 'attack'),
+            defender_station: this.engine.addObserver(31.2304, 121.4737, 0.370, 'ground'),
             current_date: this.state.selected_range[0]
         })
         setInterval(this.handleTimer, 1000);
@@ -105,7 +105,7 @@ class App extends Component {
             endDay = dayjs(date_range[1])
         }
 
-        this.engine.addSatellite(station, 0x0000FF, 50, this.state.current_date);
+        this.engine.addSatellite(station, 0x0000FF, 180, this.state.current_date);
 
         this.engine.addOrbit(station, this.state.current_date, endDay.diff(startDay, 'minutes'));
         this.setState({
@@ -253,7 +253,7 @@ class App extends Component {
                             }</span>
                         <br></br>
                         <label className="label h6">Jammer Coordinates&nbsp;</label>
-                        <CoordinateInput className='CoordinateInput' value='30° 00′ 00″ N 090° 00′ 00″ W' placeholder='30° 00′ 00″ N 090° 00′ 00″ W' placeholderChar={null}
+                        <CoordinateInput className='CoordinateInput' value='39° 54′ 15″ N 116° 24′ 27″ E' placeholder='39° 54′ 15″ N 116° 24′ 27″ E' placeholderChar={null}
                             onChange={this.updateAttackerCoords}
                         />
                     </div>
@@ -270,7 +270,7 @@ class App extends Component {
                                 }</span>
                             <br></br>
                     <label className="label h6 ">Ground Station Coordinates&nbsp;</label>
-                    <CoordinateInput className='CoordinateInput' value='28° 34′ 24″ N 080° 39′ 03″ W' placeholder='28° 34′ 24″ N 080° 39′ 03″ W' placeholderChar={null}
+                    <CoordinateInput className='CoordinateInput' value='31° 13′ 49″ N 121° 28′ 25″ E' placeholder='31° 13′ 49″ N 121° 28′ 25″ E' placeholderChar={null}
                         onChange={this.updateDefenderCoords}
                     />
                     <div className="DefenderPower">
@@ -288,6 +288,8 @@ class App extends Component {
             .then(stations => {
                 this.setState({stations});
                 var defaultTarget = stations.find(obj => {
+                    return obj.name?.trim() === "STARLINK-35678";
+                }) || stations.find(obj => {
                     return obj.name?.includes("STARLINK");
                 });
                 if(defaultTarget != null){

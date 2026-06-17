@@ -426,8 +426,17 @@ export class Engine {
         this.controls = new OrbitControls(this.camera, this.el);
         this.controls.enablePan = false;
         this.controls.addEventListener('change', () => this.render());
-        this.camera.position.z = -15000;
-        this.camera.position.x = 15000;
+        // Center the initial view on lat 20N at Japan's longitude (~139E)
+        // so Japan sits in the middle of the globe. Scene coords follow
+        // toThree() in tle.js: x = ecf.x, y = ecf.z, z = -ecf.y.
+        const camDist = 21000;
+        const latRad = 20 * Math.PI / 180;           // center latitude
+        const lonRad = 139 * Math.PI / 180;          // East longitude of Japan
+        this.camera.position.set(
+            camDist * Math.cos(latRad) * Math.cos(lonRad),   // ecf.x -> scene.x
+            camDist * Math.sin(latRad),                      // ecf.z -> scene.y
+            -camDist * Math.cos(latRad) * Math.sin(lonRad)   // -ecf.y -> scene.z
+        );
         this.camera.lookAt(0, 0, 0);
     }
 
