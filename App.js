@@ -43,6 +43,11 @@ class App extends Component {
     componentDidMount() {
         this.engine = new Engine();
         this.engine.initialize(this.el);
+        this.engine.onObserverMoved = (name, lat, lon) => {
+            // engine mutates the station's gdPosition in place; force a
+            // re-render so range/SINR/visibility badges update live while dragging.
+            this.setState({ dragged_coords: { name, lat, lon } });
+        };
         this.setState({
             current_date: this.state.selected_range[0]
         })
@@ -279,7 +284,7 @@ class App extends Component {
     }
 
     addCelestrakSets = () => {
-        this.engine.loadLteFileStations(getCorsFreeUrl('http://www.celestrak.com/NORAD/elements/active.txt'), 0xffffff, {render: false})
+        this.engine.loadLteFileStations(require('./assets/active.txt'), 0xffffff, {render: false})
             .then(stations => {
                 this.setState({stations});
                 var defaultTarget = stations.find(obj => {

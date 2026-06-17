@@ -8,6 +8,9 @@ import * as satellite from 'satellite.js/lib/index';
 
 
 const SatelliteSize = 50;
+// Push observer markers slightly above the surface so the full circle sprite
+// is visible instead of being half-occluded by the Earth sphere.
+const MarkerLiftFactor = 1.02;
 const ixpdotp = 1440 / (2.0 * 3.141592654) ;
 const lightSpeed = 299792458
 
@@ -27,6 +30,9 @@ const defaultStationOptions = {
 export class Engine {
 
     stations = [];
+    observers = {};        // keyed by material_name ('attack' | 'ground')
+    dragging = null;       // material_name currently being dragged
+    onObserverMoved = null;// callback(material_name, lat, lon)
 
     initialize(container, options = {}) {
         this.el = container;
@@ -41,10 +47,14 @@ export class Engine {
 
         window.addEventListener('resize', this.handleWindowResize);
         window.addEventListener('pointerdown', this.handleMouseDown);
+        window.addEventListener('pointermove', this.handleMouseMove);
+        window.addEventListener('pointerup', this.handleMouseUp);
     }
 
     dispose() {
         window.removeEventListener('pointerdown', this.handleMouseDown);
+        window.removeEventListener('pointermove', this.handleMouseMove);
+        window.removeEventListener('pointerup', this.handleMouseUp);
         window.removeEventListener('resize', this.handleWindowResize);
         //window.cancelAnimationFrame(this.requestID);
         
@@ -65,15 +75,28 @@ export class Engine {
         this.render();
     };
 
-    handleMouseDown = (e) => {
+    _pointerToRay = (e) => {
         const mouse = new THREE.Vector2(
             (e.clientX / window.innerWidth ) * 2 - 1,
             -(e.clientY / window.innerHeight ) * 2 + 1 );
+        this.raycaster.setFromCamera(mouse, this.camera);
+    }
 
-	    this.raycaster.setFromCamera(mouse, this.camera);
+    handleMouseDown = (e) => {
+        this._pointerToRay(e);
+
+        // Start dragging an observer marker if one was clicked
+        const markers = Object.entries(this.observers)
+            .filter(([, s]) => s && s.mesh)
+            .map(([name, s]) => { s.mesh.userData._observerName = name; return s.mesh; });
+        const hit = this.raycaster.intersectObjects(markers, false);
+        if (hit && hit.length > 0) {
+            this.dragging = hit[0].object.userData._observerName;
+            if (this.controls) this.controls.enabled = false;
+            return;
+        }
 
         let station = null;
-
 	    var intersects = this.raycaster.intersectObjects(this.scene.children, true);
         if (intersects && intersects.length > 0) {
             const picked = intersects[0].object;
@@ -84,6 +107,42 @@ export class Engine {
 
         const cb = this.options.onStationClicked;
         if (cb) cb(station);
+    }
+
+    handleMouseMove = (e) => {
+        if (!this.dragging || !this.earthMesh) return;
+        this._pointerToRay(e);
+        const hit = this.raycaster.intersectObject(this.earthMesh, false);
+        if (!hit || hit.length === 0) return;
+
+        const { lat, lon } = this._sceneToLatLon(hit[0].point);
+        const station = this.observers[this.dragging];
+        if (station) {
+            this.moveObserver(station, lat, lon);
+            if (this.onObserverMoved) this.onObserverMoved(this.dragging, lat, lon);
+        }
+    }
+
+    handleMouseUp = () => {
+        if (this.dragging) {
+            this.dragging = null;
+            if (this.controls) this.controls.enabled = true;
+        }
+    }
+
+    // Inverse of toThree() in tle.js, then ECEF vector -> geocentric lat/lon
+    _sceneToLatLon = (p) => {
+        const ex = p.x, ey = -p.z, ez = p.y;
+        const lon = Math.atan2(ey, ex) * 180 / Math.PI;
+        const lat = Math.atan2(ez, Math.sqrt(ex * ex + ey * ey)) * 180 / Math.PI;
+        return { lat, lon };
+    }
+
+    moveObserver = (station, lat, lon, height = 0.370) => {
+        const pos = getPositionFromGroundCoords(lat, lon, height);
+        station.mesh.position.set(pos[0].x * MarkerLiftFactor, pos[0].y * MarkerLiftFactor, pos[0].z * MarkerLiftFactor);
+        station.gdPosition = pos[1];
+        this.render();
     }
 
 
@@ -123,7 +182,7 @@ export class Engine {
     addObserver = (lat, long, height, material_name) => {
         const gd = this._getSatelliteSprite(0x00FF00, 200);
         const pos = getPositionFromGroundCoords(lat, long, height);
-        gd.position.set(pos[0].x, pos[0].y, pos[0].z);
+        gd.position.set(pos[0].x * MarkerLiftFactor, pos[0].y * MarkerLiftFactor, pos[0].z * MarkerLiftFactor);
         var station = {};
         station.mesh = gd;
         if (material_name == 'ground'){
@@ -133,9 +192,11 @@ export class Engine {
             station.mesh.material = this.selectedMaterial;
         }
         station.gdPosition = pos[1];
-        
+        station.materialName = material_name;
+
         //this.stations.push(gd)
         this.earth.add(gd);
+        this.observers[material_name] = station;
         return station;
     }
 
@@ -168,6 +229,16 @@ export class Engine {
             'is_visible': lookAngles.elevation > 0,
             'range': lookAngles.rangeSat
         }
+    }
+
+    getSubSatellitePoint = (satelliteStation, currentTime) => {
+        if (!satelliteStation || !satelliteStation.eciPosition) return null;
+        var gmst = satellite.gstime(currentTime);
+        var gd = satellite.eciToGeodetic(satelliteStation.eciPosition, gmst);
+        return {
+            lat: satellite.degreesLat(gd.latitude),
+            lon: satellite.degreesLong(gd.longitude)
+        };
     }
 
     addOrbit = (station, initialDate = null, manualMinutes=null) => {
@@ -401,6 +472,7 @@ export class Engine {
         });
 
         const earth = new THREE.Mesh(geometry, material);
+        this.earthMesh = earth;
         group.add(earth);
 
         // // Axis
