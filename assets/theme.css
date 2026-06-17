@@ -44,12 +44,25 @@ h1 {
     outline: none;
 }
 
+.ResultsWrapper {
+    position: relative;
+    z-index: 1000;
+    background-color: rgb(30, 32, 40);
+    padding: 2px 8px;
+    border-radius: 6px;
+}
+
 .Result {
     margin: 5px 0;
     border: 1px solid rgba(255, 255, 255, 0.4);
-    background-color: rgba(255, 255, 255, 0.1);
+    background-color: rgb(45, 48, 60);
     border-top-right-radius: 10px;
     padding: 4px 10px;
+    cursor: pointer;
+}
+
+.Result:hover {
+    background-color: rgb(70, 74, 90);
 }
 
 
